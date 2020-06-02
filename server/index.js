@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const bodyParser = require("body-parser");
+// const bodyParser = require("body-parser"); Deprecated
 const roomRoute = require("../controller/routers");
 const socket = require("socket.io");
 const db = require("../models/db");
@@ -16,7 +16,8 @@ const PORT = process.env.PORT || 5001;
 const voted_data = {};
 
 app.use(cors());
-app.use(bodyParser.json());
+// app.use(bodyParser.json());
+app.use(express.json());
 
 // Create router connection
 app.use("/room", roomRoute);
@@ -28,13 +29,13 @@ const server = app.listen(PORT, () => {
 // Socket.io connection
 const io = socket(server);
 
-io.on("connection", socket => {
-  socket.on("room", room => {
+io.on("connection", (socket) => {
+  socket.on("room", (room) => {
     socket.join(room);
   });
 
   // Server temporary data usage
-  socket.on("vote", vote => {
+  socket.on("vote", (vote) => {
     if (voted_data[vote.room_name] !== undefined) {
       voted_data[vote.room_name][vote.category] += 1;
     } else {
@@ -46,7 +47,7 @@ io.on("connection", socket => {
         분식: 0,
         햄버거: 0,
         도시락: 0,
-        아시아음식: 0
+        아시아음식: 0,
       };
     }
 
@@ -58,7 +59,7 @@ io.on("connection", socket => {
 app.get("/room/:room_name", async (req, res, next) => {
   try {
     // Status: wait
-    let theRoom = await db.getByRoom_name(req.params.room_name).then(res => {
+    let theRoom = await db.getByRoom_name(req.params.room_name).then((res) => {
       if (res) {
         return res;
       }
@@ -68,7 +69,7 @@ app.get("/room/:room_name", async (req, res, next) => {
     db.getByRoom_nameAndUpdatePeopleNumber(
       req.params.room_name,
       joined_num
-    ).then(res => {
+    ).then((res) => {
       io.sockets.in(req.params.room_name).emit("joined", joined_num);
     });
 
@@ -76,7 +77,7 @@ app.get("/room/:room_name", async (req, res, next) => {
     if (joined_num === 2) {
       await db
         .getByRoom_nameAndUpdateRoom_Status(req.params.room_name, "ready")
-        .then(res => {
+        .then((res) => {
           io.sockets.in(req.params.room_name).emit("status", "ready");
         });
 
@@ -91,7 +92,7 @@ app.get("/room/:room_name", async (req, res, next) => {
           db.getByRoom_nameAndUpdateRoom_Status(
             req.params.room_name,
             "vote"
-          ).then(res => {
+          ).then((res) => {
             io.sockets.in(req.params.room_name).emit("status", "vote");
             liveCountdown(15);
           });
@@ -100,7 +101,7 @@ app.get("/room/:room_name", async (req, res, next) => {
     }
 
     // Function for voting state containing result state
-    const liveCountdown = second => {
+    const liveCountdown = (second) => {
       let count = second;
       let countdown = setInterval(() => {
         io.sockets.in(req.params.room_name).emit("countdown", count);
@@ -112,73 +113,75 @@ app.get("/room/:room_name", async (req, res, next) => {
           db.getByRoom_nameAndUpdateRoom_Status(
             req.params.room_name,
             "result"
-          ).then(async res => {
+          ).then(async (res) => {
             try {
               io.sockets.in(req.params.room_name).emit("status", "result");
 
-              await db.getByRoom_name(req.params.room_name).then(async res => {
-                try {
-                  if (voted_data[req.params.room_name] !== undefined) {
-                    let newCategory = voted_data[req.params.room_name];
-                    await db.getByRoom_nameAndUpdateCategory(
-                      req.params.room_name,
-                      newCategory
-                    );
-                  }
-
-                  let roomStatus = await db
-                    .getByRoom_name(req.params.room_name)
-                    .then(res => {
-                      return res;
-                    });
-
-                  let voted;
-                  if (voted_data[req.params.room_name] === undefined) {
-                    voted = roomStatus.vote_count;
-                  } else {
-                    voted = voted_data[req.params.room_name];
-                  }
-
-                  let category = finalResult(voted);
-                  let query = qs.escape(category);
-                  let location = roomStatus.location;
-                  let KEY = "KakaoAK " + process.env.KAKAOMAP_API_KEY;
-                  let radius = 500;
-                  let mapUrl =
-                    "https://dapi.kakao.com/v2/local/search/keyword.json";
-                  let final_result = await axios({
-                    method: "GET",
-                    url: `${mapUrl}?y=${location.latitude}&x=${location.longitude}&radius=${radius}&query=${query}&sort=distance`,
-                    headers: {
-                      Authorization: KEY
+              await db
+                .getByRoom_name(req.params.room_name)
+                .then(async (res) => {
+                  try {
+                    if (voted_data[req.params.room_name] !== undefined) {
+                      let newCategory = voted_data[req.params.room_name];
+                      await db.getByRoom_nameAndUpdateCategory(
+                        req.params.room_name,
+                        newCategory
+                      );
                     }
-                  }).then(res => res);
 
-                  db.getByRoom_nameAndUpdateFinalResult(
-                    req.params.room_name,
-                    final_result.data.documents
-                  ).then(res => {
-                    db.getByRoom_nameAndUpdateVoteResult(
+                    let roomStatus = await db
+                      .getByRoom_name(req.params.room_name)
+                      .then((res) => {
+                        return res;
+                      });
+
+                    let voted;
+                    if (voted_data[req.params.room_name] === undefined) {
+                      voted = roomStatus.vote_count;
+                    } else {
+                      voted = voted_data[req.params.room_name];
+                    }
+
+                    let category = finalResult(voted);
+                    let query = qs.escape(category);
+                    let location = roomStatus.location;
+                    let KEY = "KakaoAK " + process.env.KAKAOMAP_API_KEY;
+                    let radius = 500;
+                    let mapUrl =
+                      "https://dapi.kakao.com/v2/local/search/keyword.json";
+                    let final_result = await axios({
+                      method: "GET",
+                      url: `${mapUrl}?y=${location.latitude}&x=${location.longitude}&radius=${radius}&query=${query}&sort=distance`,
+                      headers: {
+                        Authorization: KEY,
+                      },
+                    }).then((res) => res);
+
+                    db.getByRoom_nameAndUpdateFinalResult(
                       req.params.room_name,
-                      category
-                    ).then(res => res);
+                      final_result.data.documents
+                    ).then((res) => {
+                      db.getByRoom_nameAndUpdateVoteResult(
+                        req.params.room_name,
+                        category
+                      ).then((res) => res);
 
-                    let totalResult = {
-                      vote_result: category,
-                      vote_count: voted_data[req.params.room_name]
-                        ? voted_data[req.params.room_name][category]
-                        : 0,
-                      final_result: res.final_result
-                    };
+                      let totalResult = {
+                        vote_result: category,
+                        vote_count: voted_data[req.params.room_name]
+                          ? voted_data[req.params.room_name][category]
+                          : 0,
+                        final_result: res.final_result,
+                      };
 
-                    io.sockets
-                      .in(req.params.room_name)
-                      .emit("result", totalResult);
-                  });
-                } catch (err) {
-                  return err;
-                }
-              });
+                      io.sockets
+                        .in(req.params.room_name)
+                        .emit("result", totalResult);
+                    });
+                  } catch (err) {
+                    return err;
+                  }
+                });
             } catch (err) {
               return err;
             }
@@ -187,9 +190,11 @@ app.get("/room/:room_name", async (req, res, next) => {
       }, 1000);
     };
 
-    let roomStatus = await db.getByRoom_name(req.params.room_name).then(res => {
-      return res;
-    });
+    let roomStatus = await db
+      .getByRoom_name(req.params.room_name)
+      .then((res) => {
+        return res;
+      });
 
     let result = [];
     if (roomStatus.room_status === "result") {
@@ -200,7 +205,7 @@ app.get("/room/:room_name", async (req, res, next) => {
       joined_num: joined_num,
       status: roomStatus.room_status,
       vote_result: roomStatus.vote_result,
-      final_result: result
+      final_result: result,
     });
   } catch (err) {
     next(err);
